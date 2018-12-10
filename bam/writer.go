@@ -6,13 +6,13 @@ package bam
 
 import (
 	"bytes"
-	"compress/gzip"
 	"encoding/binary"
 	"errors"
 	"io"
 
-	"github.com/grailbio/hts/bgzf"
 	"github.com/grailbio/hts/sam"
+	"github.com/grailbio/hts/bgzf"
+	"github.com/klauspost/compress/gzip"
 )
 
 // Writer implements BAM data writing.
@@ -72,25 +72,27 @@ func (bw *Writer) writeHeader(h *sam.Header) error {
 	return err
 }
 
-// Write writes r to the BAM stream.
-func (bw *Writer) Write(r *sam.Record) error {
+// Serialize the record into "buf".
+func marshal(r *sam.Record, buf *bytes.Buffer) error {
 	if len(r.Name) == 0 || len(r.Name) > 254 {
 		return errors.New("bam: name absent or too long")
 	}
 	if r.Qual != nil && len(r.Qual) != r.Seq.Length {
 		return errors.New("bam: sequence/quality length mismatch")
 	}
-	tags := buildAux(r.AuxFields)
+
+	scratch := bufPool.Get().([]byte)
+	resizeScratch(&scratch, 0)
+	buildAux(r.AuxFields, &scratch)
+	tags := scratch
+	wb := errWriter{w: buf}
+	bin := binaryWriter{w: &wb}
 	recLen := bamFixedRemainder +
 		len(r.Name) + 1 + // Null terminated.
 		len(r.Cigar)<<2 + // CigarOps are 4 bytes.
 		len(r.Seq.Seq) +
 		len(r.Qual) +
 		len(tags)
-
-	bw.buf.Reset()
-	wb := errWriter{w: &bw.buf}
-	bin := binaryWriter{w: &wb}
 
 	// Write record header data.
 	bin.writeInt32(int32(recLen))
@@ -107,7 +109,8 @@ func (bw *Writer) Write(r *sam.Record) error {
 	bin.writeInt32(int32(r.TempLen))
 
 	// Write variable length data.
-	wb.Write(append([]byte(r.Name), 0))
+	wb.WriteString(r.Name)
+	wb.WriteByte(0)
 	writeCigarOps(&bin, r.Cigar)
 	wb.Write(doublets(r.Seq.Seq).Bytes())
 	if r.Qual != nil {
@@ -118,10 +121,16 @@ func (bw *Writer) Write(r *sam.Record) error {
 		}
 	}
 	wb.Write(tags)
-	if wb.err != nil {
-		return wb.err
-	}
+	bufPool.Put(scratch)
+	return wb.err
+}
 
+// Write writes r to the BAM stream.
+func (bw *Writer) Write(r *sam.Record) error {
+	bw.buf.Reset()
+	if err := marshal(r, &bw.buf); err != nil {
+		return err
+	}
 	_, err := bw.bg.Write(bw.buf.Bytes())
 	return err
 }
@@ -152,6 +161,15 @@ func (w *errWriter) Write(p []byte) (int, error) {
 	}
 	var n int
 	n, w.err = w.w.Write(p)
+	return n, w.err
+}
+
+func (w *errWriter) WriteString(s string) (int, error) {
+	if w.err != nil {
+		return 0, w.err
+	}
+	var n int
+	n, w.err = w.w.WriteString(s)
 	return n, w.err
 }
 

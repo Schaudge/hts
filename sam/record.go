@@ -9,8 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"unsafe"
 
-	"github.com/grailbio/hts/internal"
+	"github.com/biogo/hts/internal"
+	"github.com/grailbio/base/simd"
+	"github.com/grailbio/bio/biosimd"
 )
 
 // Record represents a SAM/BAM record.
@@ -59,19 +62,24 @@ func NewRecord(name string, ref, mRef *Reference, p, mPos, tLen int, mapQ byte, 
 			return nil, errors.New("sam: specified mate position != -1 without mate reference")
 		}
 	}
-	r := &Record{
-		Name:      name,
-		Ref:       ref,
-		Pos:       p,
-		MapQ:      mapQ,
-		Cigar:     co,
-		MateRef:   mRef,
-		MatePos:   mPos,
-		TempLen:   tLen,
-		Seq:       NewSeq(seq),
-		Qual:      qual,
-		AuxFields: aux,
-	}
+	// gometalinter doesn't allow this.
+	/*
+		if GetFromFreePool == nil {
+			panic("GetFromFreePool not set. You must link grail.com/bio/encoding/bam to your executable")
+		}
+	*/
+	r := GetFromFreePool()
+	r.Name = name
+	r.Ref = ref
+	r.Pos = p
+	r.MapQ = mapQ
+	r.Cigar = co
+	r.MateRef = mRef
+	r.MatePos = mPos
+	r.TempLen = tLen
+	r.Seq = NewSeq(seq)
+	r.Qual = qual
+	r.AuxFields = aux
 	return r, nil
 }
 
@@ -131,7 +139,19 @@ func (r *Record) Bin() int {
 	if r.Flags&(Unmapped|MateUnmapped) == Unmapped|MateUnmapped {
 		return 4680 // reg2bin(-1, 0)
 	}
-	return int(internal.BinFor(r.Pos, r.End()))
+	end := r.End()
+
+	// If the alignment length is zero (for example, if the read is
+	// unmapped), then increment end by 1 and treat the read as length
+	// 1 for binning purposes.
+	if end == r.Pos {
+		end++
+	}
+
+	if !internal.IsValidIndexPos(r.Pos) || !internal.IsValidIndexPos(end) {
+		return -1
+	}
+	return int(internal.BinFor(r.Pos, end))
 }
 
 // Len returns the length of the alignment.
@@ -279,14 +299,10 @@ func (r *Record) UnmarshalSAM(h *Header, b []byte) error {
 	}
 	if !bytes.Equal(f[10], []byte{'*'}) {
 		r.Qual = append(r.Qual, f[10]...)
-		for i := range r.Qual {
-			r.Qual[i] -= 33
-		}
+		simd.AddConst8Inplace(r.Qual, 256-33)
 	} else if r.Seq.Length != 0 {
 		r.Qual = make([]byte, r.Seq.Length)
-		for i := range r.Qual {
-			r.Qual[i] = 0xff
-		}
+		simd.Memset8(r.Qual, 0xff)
 	}
 	if len(r.Qual) != 0 && len(r.Qual) != r.Seq.Length {
 		return errors.New("sam: sequence/quality length mismatch")
@@ -411,9 +427,7 @@ func formatQual(q []byte) []byte {
 	for _, v := range q {
 		if v != 0xff {
 			a := make([]byte, len(q))
-			for i, p := range q {
-				a[i] = p + 33
-			}
+			simd.AddConst8(a, q, 33)
 			return a
 		}
 	}
@@ -478,15 +492,67 @@ func contract(s []byte) []Doublet {
 }
 
 // Expand returns the byte encoded form of the receiver.
+//
+// This now has decent performance for ns.Length >= 32 (allocation is now the
+// main bottleneck in that case), but it should still be avoided in new code.
+// Base/BaseChar() is better if you are just performing a small number of point
+// queries.  Direct calls to biosimd.UnpackSeq{Unsafe} or
+// UnpackAndReplaceSeq{Unsafe}, which populate preallocated buffers, are better
+// when you are iterating through many bases.  (The main advantage of the
+// Unsafe functions is great performance for length < 32.)
 func (ns Seq) Expand() []byte {
 	s := make([]byte, ns.Length)
-	for i := range s {
-		if i&1 == 0 {
-			s[i] = n16TableRev[ns.Seq[i>>1]>>4]
-		} else {
-			s[i] = n16TableRev[ns.Seq[i>>1]&0xf]
-		}
-	}
-
+	nsSeqPtr := (*[]byte)(unsafe.Pointer(&ns.Seq))
+	biosimd.UnpackAndReplaceSeq(s, *nsSeqPtr, &n16TableRev)
 	return s
+}
+
+// SeqBase is BAM's 4-bit encoding of nucleotide base types. See section 4.2 of
+// https://samtools.github.io/hts-specs/SAMv1.pdf
+type SeqBase byte
+
+const (
+	// Commonly used SeqBase constants.
+	BaseA SeqBase = 1
+	BaseC SeqBase = 2
+	BaseG SeqBase = 4
+	BaseT SeqBase = 8
+	BaseS SeqBase = 6
+	BaseN SeqBase = 15
+
+	// NumSeqBaseTypes is number of possible SeqBase values.  SeqBase starts
+	// from 0.
+	NumSeqBaseTypes = 16
+)
+
+func CharToSeqBase(char byte) SeqBase {
+	return SeqBase(n16Table[char])
+}
+
+// Base returns the pos'th base of the sequence.
+//
+// REQUIRES: 0 <= pos < seq.Length
+func (ns Seq) Base(pos int) SeqBase {
+	var base SeqBase
+	if pos%2 == 0 {
+		base = SeqBase(ns.Seq[pos/2] >> 4)
+	} else {
+		base = SeqBase(ns.Seq[pos/2] & 0xf)
+	}
+	return base
+}
+
+// BaseChar returns the pos'th base of the as a character, such as 'A', 'T'.
+//
+// REQUIRES: 0 <= pos < seq.Length
+func (ns Seq) BaseChar(pos int) byte {
+	return n16TableRev[ns.Base(pos)]
+}
+
+// Char converts a SeqBase to a human-readable character.  For example,
+// BaseA.Char() == 'A'.
+//
+// REQUIRES: 0 <= b < NumSeqBaseTypes
+func (b SeqBase) Char() byte {
+	return n16TableRev[b]
 }

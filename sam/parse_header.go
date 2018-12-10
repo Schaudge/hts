@@ -29,6 +29,10 @@ func (bh *Header) UnmarshalBinary(b []byte) error {
 	return bh.DecodeBinary(bytes.NewReader(b))
 }
 
+// Max possible SAM header size, in bytes. For detecting a corrupt header
+// without blowing up memory usage.
+const maxSAMHeaderSize = 0xffffff
+
 // DecodeBinary unmarshals a Header from the given io.Reader. The byte
 // stream must be in the format described in the SAM specification,
 // section 4.2.
@@ -49,8 +53,8 @@ func (bh *Header) DecodeBinary(r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	if lText < 0 {
-		return errors.New("sam: invalid text length")
+	if lText < 0 || lText >= maxSAMHeaderSize {
+		return errors.New("sam: wrong header length")
 	}
 	text := make([]byte, lText)
 	n, err := r.Read(text)
@@ -68,8 +72,8 @@ func (bh *Header) DecodeBinary(r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	if nRef < 0 {
-		return errors.New("sam: invalid reference count field")
+	if nRef < 0 || nRef > maxSAMHeaderSize {
+		return errors.New("sam: wrong reference length")
 	}
 	refs, err := readRefRecords(r, nRef)
 	if err != nil {
@@ -100,8 +104,8 @@ func readRefRecords(r io.Reader, n int32) ([]*Reference, error) {
 		if err != nil {
 			return nil, err
 		}
-		if lName < 1 {
-			return nil, errors.New("sam: invalid name length")
+		if lName < 1 || lName > maxSAMHeaderSize {
+			return nil, errors.New("sam: wrong reference name length")
 		}
 		name := make([]byte, lName)
 		n, err := r.Read(name)

@@ -6,8 +6,9 @@ package bgzf
 
 import (
 	"bytes"
-	"compress/gzip"
 	"io"
+	"github.com/grailbio/base/compress/libdeflate"
+	"github.com/klauspost/compress/gzip"
 )
 
 // Cache is a Block caching type. Basic cache implementations are provided
@@ -76,6 +77,8 @@ type Block interface {
 	// return the new offset.
 	seek(offset int64) error
 	readFrom(io.ReadCloser) error
+
+	readBuf([]byte, libdeflate.Decompressor) error
 
 	// len returns the number of remaining
 	// bytes that can be read from the Block.
@@ -163,6 +166,19 @@ func (b *block) readFrom(r io.ReadCloser) error {
 	b.owner = o
 	b.magic = b.magic && b.len() == 0
 	return r.Close()
+}
+
+func (b *block) readBuf(inData []byte, dd libdeflate.Decompressor) error {
+	o := b.owner
+	b.owner = nil
+	n, err := dd.Decompress(b.data[:], inData)
+	if err != nil {
+		return err
+	}
+	b.buf = bytes.NewReader(b.data[:n])
+	b.owner = o
+	b.magic = b.magic && b.len() == 0
+	return nil
 }
 
 func (b *block) seek(offset int64) error {

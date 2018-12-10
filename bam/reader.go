@@ -5,11 +5,11 @@
 package bam
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"unsafe"
 
 	"github.com/grailbio/hts/bgzf"
@@ -33,9 +33,13 @@ type Reader struct {
 
 	lastChunk bgzf.Chunk
 
-	// buf is used to read the block size of each record.
-	buf [4]byte
+	// sizeBuf and sizeStorage are used to read the block size of each record
+	// without having to allocate new storage and a slice everytime.
+	sizeStorage [4]byte
+	sizeBuf     []byte
 }
+
+const maxBAMRecordSize = 0xffffff
 
 // NewReader returns a new Reader using the given io.Reader
 // and setting the read concurrency to rd. If rd is zero
@@ -58,6 +62,7 @@ func NewReader(r io.Reader, rd int) (*Reader, error) {
 		return nil, err
 	}
 	br.lastChunk.End = br.r.LastChunk().End
+	br.sizeBuf = br.sizeStorage[:]
 	return br, nil
 }
 
@@ -118,76 +123,145 @@ func (br *Reader) Read() (*sam.Record, error) {
 	if br.c != nil && vOffset(br.r.LastChunk().End) >= vOffset(br.c.End) {
 		return nil, io.EOF
 	}
-
-	b, err := newBuffer(br)
-	if err != nil {
+	// Use a pool of buffer's to share buffers between concurrent clients
+	// and hence reduce the number of allocations required.
+	buf := bufPool.Get().([]byte)
+	if err := readAlignment(br, &buf); err != nil {
+		bufPool.Put(buf)
 		return nil, err
 	}
+	rec, err := unmarshal(buf, br.h, br.omit)
+	bufPool.Put(buf)
+	return rec, err
+}
 
-	var rec sam.Record
-	refID := b.readInt32()
-	rec.Pos = int(b.readUint32())
-	nLen := b.readUint8()
-	rec.MapQ = b.readUint8()
-	b.discard(2)
-	nCigar := b.readUint16()
-	rec.Flags = sam.Flags(b.readUint16())
-	lSeq := int(b.readInt32())
-	nextRefID := b.readInt32()
-	rec.MatePos = int(b.readInt32())
-	rec.TempLen = int(b.readInt32())
+// Unmarshal a serialized record.  Parameter omit is the value of Reader.Omit().
+// Most callers should pass zero as omit.
+func unmarshal(b []byte, header *sam.Header, omit int) (*sam.Record, error) {
+	rec := (*sam.RecordWithScratchBuf)(unsafe.Pointer(sam.GetFromFreePool()))
+	if len(b) < 32 {
+		return nil, errors.New("bam: record too short")
+	}
+	// Need to use int(int32(uint32)) to ensure 2's complement extension of -1.
+	refID := int(int32(binary.LittleEndian.Uint32(b)))
+	rec.Pos = int(int32(binary.LittleEndian.Uint32(b[4:])))
+	nLen := int(b[8])
+	rec.MapQ = b[9]
+	nCigar := int(binary.LittleEndian.Uint16(b[12:]))
+	rec.Flags = sam.Flags(binary.LittleEndian.Uint16(b[14:]))
+	lSeq := int(binary.LittleEndian.Uint32(b[16:]))
+	nextRefID := int(int32(binary.LittleEndian.Uint32(b[20:])))
+	rec.MatePos = int(int32(binary.LittleEndian.Uint32(b[24:])))
+	rec.TempLen = int(int32(binary.LittleEndian.Uint32(b[28:])))
 
 	// Read variable length data.
-	if nLen < 1 {
-		return nil, fmt.Errorf("bam: invalid read name length: %d", nLen)
-	}
-	rec.Name = string(b.bytes(int(nLen) - 1))
-	b.discard(1)
+	pos := 32
 
-	rec.Cigar = readCigarOps(b.bytes(int(nCigar) * 4))
+	blen := len(b) - pos
+	cigarOffset := alignOffset(blen)                     // store the cigar int32s here
+	auxOffset := alignOffset(cigarOffset + (nCigar * 4)) // store the AuxFields here
 
-	var seq, auxTags []byte
-	if br.omit >= AllVariableLengthData {
-		goto done
+	nDoubletBytes := (lSeq + 1) >> 1
+	bAuxOffset := pos + nLen + (nCigar * 4) + nDoubletBytes + lSeq
+	if len(b) < bAuxOffset {
+		return nil, fmt.Errorf("Corrupt BAM aux record: len(b)=%d, auxoffset=%d", len(b), bAuxOffset)
 	}
-
-	if lSeq < 0 {
-		return nil, fmt.Errorf("bam: invalid sequence length: %d", lSeq)
-	}
-	seq = make([]byte, (lSeq>>1)+(lSeq&0x1))
-	copy(seq, b.bytes(len(seq)))
-	rec.Seq = sam.Seq{Length: lSeq, Seq: *(*doublets)(unsafe.Pointer(&seq))}
-	rec.Qual = b.bytes(lSeq)
-
-	if br.omit >= AuxTags {
-		goto done
-	}
-	auxTags = b.bytes(b.len())
-	rec.AuxFields, err = parseAux(auxTags)
+	nAuxFields, err := countAuxFields(b[bAuxOffset:])
 	if err != nil {
 		return nil, err
+	}
+	shadowSize := auxOffset + (nAuxFields * sizeofSliceHeader)
+
+	// shadowBuf is used as an 'arena' from which all objects/slices
+	// required to store the result of parsing the bam alignment record.
+	// This reduces the load on GC and consequently allows for better
+	// scalability with the number of cores used by clients of this package.
+	shadowOffset := 0
+	resizeScratch(&rec.Scratch, shadowSize)
+	shadowBuf := rec.Scratch
+	copy(shadowBuf, b[pos:])
+
+	bufHdr := (*reflect.SliceHeader)(unsafe.Pointer(&shadowBuf))
+
+	// Note that rec.Name now points to the shadow buffer
+	hdr := (*reflect.StringHeader)(unsafe.Pointer(&rec.Name))
+	hdr.Data = uintptr(unsafe.Pointer(bufHdr.Data))
+	hdr.Len = nLen - 1 // drop trailing '\0'
+	shadowOffset += nLen
+
+	var sliceHdr *reflect.SliceHeader
+
+	if nCigar > 0 {
+		for i := 0; i < nCigar; i++ {
+			*(*uint32)(unsafe.Pointer(&shadowBuf[cigarOffset+(i*4)])) = binary.LittleEndian.Uint32(shadowBuf[shadowOffset+(i*4):])
+		}
+		sliceHdr = (*reflect.SliceHeader)(unsafe.Pointer(&rec.Cigar))
+		sliceHdr.Data = bufHdr.Data + uintptr(cigarOffset)
+		sliceHdr.Len = nCigar
+		sliceHdr.Cap = sliceHdr.Len
+		shadowOffset += nCigar * 4
+	} else {
+		sliceHdr = (*reflect.SliceHeader)(unsafe.Pointer(&rec.Cigar))
+		sliceHdr.Data = uintptr(0)
+		sliceHdr.Len = 0
+		sliceHdr.Cap = 0
+	}
+
+	if omit >= AllVariableLengthData {
+		goto done
+	}
+
+	rec.Seq.Length = lSeq
+
+	sliceHdr = (*reflect.SliceHeader)(unsafe.Pointer(&rec.Seq.Seq))
+	sliceHdr.Data = uintptr(unsafe.Pointer(bufHdr.Data + uintptr(shadowOffset)))
+	sliceHdr.Len = nDoubletBytes
+	sliceHdr.Cap = sliceHdr.Len
+	shadowOffset += nDoubletBytes
+
+	if omit >= AuxTags {
+		goto done
+	}
+
+	sliceHdr = (*reflect.SliceHeader)(unsafe.Pointer(&rec.Qual))
+	sliceHdr.Data = uintptr(unsafe.Pointer(bufHdr.Data + uintptr(shadowOffset)))
+	sliceHdr.Len = lSeq
+	sliceHdr.Cap = sliceHdr.Len
+
+	shadowOffset += lSeq
+
+	if nAuxFields > 0 {
+		// Clear the array before updating rec.AuxFields. GC will be
+		// confused otherwise.
+		for i := auxOffset; i < auxOffset+nAuxFields*sizeofSliceHeader; i++ {
+			shadowBuf[i] = 0
+		}
+		sliceHdr = (*reflect.SliceHeader)(unsafe.Pointer(&rec.AuxFields))
+		sliceHdr.Data = uintptr(unsafe.Pointer(bufHdr.Data + uintptr(auxOffset)))
+		sliceHdr.Len = nAuxFields
+		sliceHdr.Cap = sliceHdr.Len
+		parseAux(shadowBuf[shadowOffset:blen], rec.AuxFields)
 	}
 
 done:
-	refs := int32(len(br.h.Refs()))
+	refs := len(header.Refs())
 	if refID != -1 {
 		if refID < -1 || refID >= refs {
 			return nil, errors.New("bam: reference id out of range")
 		}
-		rec.Ref = br.h.Refs()[refID]
+		rec.Ref = header.Refs()[refID]
 	}
 	if nextRefID != -1 {
 		if refID == nextRefID {
 			rec.MateRef = rec.Ref
-			return &rec, nil
+			return sam.CastToRecord(rec), nil
 		}
 		if nextRefID < -1 || nextRefID >= refs {
 			return nil, errors.New("bam: mate reference id out of range")
 		}
-		rec.MateRef = br.h.Refs()[nextRefID]
+		rec.MateRef = header.Refs()[nextRefID]
 	}
-
-	return &rec, nil
+	return sam.CastToRecord(rec), nil
 }
 
 // SetCache sets the cache to be used by the Reader.
@@ -300,15 +374,6 @@ func (i *Iterator) Close() error {
 	return i.Error()
 }
 
-// len(cb) must be a multiple of 4.
-func readCigarOps(cb []byte) []sam.CigarOp {
-	co := make([]sam.CigarOp, len(cb)/4)
-	for i := range co {
-		co[i] = sam.CigarOp(binary.LittleEndian.Uint32(cb[i*4 : (i+1)*4]))
-	}
-	return co
-}
-
 var jumps = [256]int{
 	'A': 1,
 	'c': 1, 'C': 1,
@@ -320,129 +385,96 @@ var jumps = [256]int{
 	'B': -1,
 }
 
-// parseAux examines the data of a SAM record's OPT fields,
-// returning a slice of sam.Aux that are backed by the original data.
-func parseAux(aux []byte) ([]sam.Aux, error) {
-	if len(aux) == 0 {
-		return nil, nil
-	}
-	aa := make([]sam.Aux, 0, 4)
+var errCorruptAuxField = errors.New("Corrupt aux field")
+
+// countAuxFields examines the data of a SAM record's OPT field to determine
+// the number of auxFields there are.
+func countAuxFields(aux []byte) (int, error) {
+	naux := 0
 	for i := 0; i+2 < len(aux); {
 		t := aux[i+2]
 		switch j := jumps[t]; {
 		case j > 0:
 			j += 3
-			aa = append(aa, sam.Aux(aux[i:i+j:i+j]))
+			i += j
+			naux++
+		case j < 0:
+			switch t {
+			case 'Z', 'H':
+				var (
+					j int
+					v byte
+				)
+				for j, v = range aux[i:] {
+					if v == 0 { // C string termination
+						break // Truncate terminal zero.
+					}
+				}
+				i += j + 1
+				naux++
+			case 'B':
+				if len(aux) < i+8 {
+					return -1, errCorruptAuxField
+				}
+				length := binary.LittleEndian.Uint32(aux[i+4 : i+8])
+				j = int(length)*jumps[aux[i+3]] + int(unsafe.Sizeof(length)) + 4
+				i += j
+				naux++
+			}
+		default:
+			return -1, errCorruptAuxField
+		}
+	}
+	return naux, nil
+}
+
+// parseAux examines the data of a SAM record's OPT fields,
+// returning a slice of sam.Aux that are backed by the original data.
+func parseAux(aux []byte, aa []sam.Aux) {
+	naa := 0
+	/*	var sliceHdr *reflect.SliceHeader
+		auxSlice := (*reflect.SliceHeader)(unsafe.Pointer(&aux))*/
+	for i := 0; i+2 < len(aux); {
+		t := aux[i+2]
+		switch j := jumps[t]; {
+		case j > 0:
+			j += 3
+			aa[naa] = sam.Aux(aux[i : i+j : i+j])
+			naa++
 			i += j
 		case j < 0:
 			switch t {
 			case 'Z', 'H':
-				j := bytes.IndexByte(aux[i:], 0)
-				if j == -1 {
-					return nil, errors.New("bam: invalid zero terminated data: no zero")
+				var (
+					j int
+					v byte
+				)
+				for j, v = range aux[i:] {
+					if v == 0 { // C string termination
+						break // Truncate terminal zero.
+					}
 				}
-				aa = append(aa, sam.Aux(aux[i:i+j:i+j]))
+				aa[naa] = sam.Aux(aux[i : i+j : i+j])
+				naa++
 				i += j + 1
 			case 'B':
 				length := binary.LittleEndian.Uint32(aux[i+4 : i+8])
 				j = int(length)*jumps[aux[i+3]] + int(unsafe.Sizeof(length)) + 4
-				if j < 0 || i+j < 0 || i+j > len(aux) {
-					return nil, fmt.Errorf("bam: invalid array length for aux data: %d", length)
-				}
-				aa = append(aa, sam.Aux(aux[i:i+j:i+j]))
+				aa[naa] = sam.Aux(aux[i : i+j : i+j])
+				naa++
 				i += j
 			}
 		default:
-			return nil, fmt.Errorf("bam: unrecognised optional field type: %q", t)
+			panic(fmt.Sprintf("bam: unrecognised optional field type: %q", t))
 		}
 	}
-	return aa, nil
 }
 
-// buffer is light-weight read buffer.
-type buffer struct {
-	off  int
-	data []byte
-	err  error
-}
-
-func (b *buffer) bytes(n int) []byte {
-	if b.err != nil {
-		return nil
-	}
-	if b.len() < n {
-		b.err = io.ErrUnexpectedEOF
-		return nil
-	}
-	s := b.off
-	b.off += n
-	return b.data[s:b.off]
-}
-
-func (b *buffer) len() int {
-	return len(b.data) - b.off
-}
-
-func (b *buffer) discard(n int) {
-	if b.err != nil {
-		return
-	}
-	if b.len() < n {
-		b.err = io.ErrUnexpectedEOF
-		return
-	}
-	b.off += n
-}
-
-func (b *buffer) readUint8() uint8 {
-	if b.err != nil {
-		return 0
-	}
-	if b.len() < 1 {
-		b.err = io.ErrUnexpectedEOF
-		return 0
-	}
-	b.off++
-	return b.data[b.off-1]
-}
-
-func (b *buffer) readUint16() uint16 {
-	if b.err != nil {
-		return 0
-	}
-	if b.len() < 2 {
-		b.err = io.ErrUnexpectedEOF
-		return 0
-	}
-	return binary.LittleEndian.Uint16(b.bytes(2))
-}
-
-func (b *buffer) readInt32() int32 {
-	if b.err != nil {
-		return 0
-	}
-	if b.len() < 4 {
-		b.err = io.ErrUnexpectedEOF
-		return 0
-	}
-	return int32(binary.LittleEndian.Uint32(b.bytes(4)))
-}
-
-func (b *buffer) readUint32() uint32 {
-	if b.err != nil {
-		return 0
-	}
-	if b.len() < 4 {
-		b.err = io.ErrUnexpectedEOF
-		return 0
-	}
-	return binary.LittleEndian.Uint32(b.bytes(4))
-}
-
-// newBuffer returns a new buffer reading from the Reader's underlying bgzf.Reader and
-// updates the Reader's lastChunk field.
-func newBuffer(br *Reader) (*buffer, error) {
-	n, err := io.ReadFull(br.r, br.buf[:4])
+// readAlignment reads the alignment record from the Reader's underlying
+// bgzf.Reader into the supplied bytes.Buffer and updates the Reader's lastChunk
+// field.
+func readAlignment(br *Reader, buf *[]byte) error {
+	n, err := io.ReadFull(br.r, br.sizeBuf)
 	// br.r.Chunk() is only valid after the call the Read(), so this
 	// must come after the first read in the record.
 	tx := br.r.Begin()
@@ -450,41 +482,38 @@ func newBuffer(br *Reader) (*buffer, error) {
 		br.lastChunk = tx.End()
 	}()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if n != 4 {
-		return nil, errors.New("bam: invalid record: short block size")
+		return errors.New("bam: invalid record: short block size")
 	}
-	b := &buffer{data: br.buf[:4]}
-	size := int(b.readInt32())
-	if size == 0 {
-		return nil, io.EOF
+	size := int(binary.LittleEndian.Uint32(br.sizeBuf))
+	if size > maxBAMRecordSize {
+		return errors.New("bam: record too large")
 	}
-	if size < 0 {
-		return nil, errors.New("bam: invalid record: invalid block size")
-	}
-	b.off, b.data = 0, make([]byte, size)
-	n, err = io.ReadFull(br.r, b.data)
+	resizeScratch(buf, size)
+	nn, err := io.ReadFull(br.r, *buf)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if n != size {
-		return nil, errors.New("bam: truncated record")
+	if nn != size {
+		return errors.New("bam: truncated record")
 	}
-	return b, nil
+	return nil
 }
 
 // buildAux constructs a single byte slice that represents a slice of sam.Aux.
-func buildAux(aa []sam.Aux) (aux []byte) {
+// *buf should be an empty slice on call, and it is filled with the result on
+// return.
+func buildAux(aa []sam.Aux, buf *[]byte) {
 	for _, a := range aa {
 		// TODO: validate each 'a'
-		aux = append(aux, []byte(a)...)
+		*buf = append(*buf, []byte(a)...)
 		switch a.Type() {
 		case 'Z', 'H':
-			aux = append(aux, 0)
+			*buf = append(*buf, 0)
 		}
 	}
-	return
 }
 
 type doublets []sam.Doublet

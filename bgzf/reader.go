@@ -7,11 +7,13 @@ package bgzf
 import (
 	"bufio"
 	"bytes"
-	"compress/flate"
-	"compress/gzip"
 	"io"
 	"runtime"
 	"sync"
+
+	"github.com/grailbio/base/compress/libdeflate"
+	"github.com/klauspost/compress/flate"
+	"github.com/klauspost/compress/gzip"
 )
 
 // countReader wraps flate.Reader, adding support for querying current offset.
@@ -119,6 +121,9 @@ func (r *buffer) readLimited(n int, src *countReader) error {
 		panic("bgzf: read into non-empty buffer")
 	}
 	r.off = 0
+	if n < 0 || n > len(r.data) {
+		return ErrCorrupt
+	}
 	var err error
 	r.size, err = io.ReadFull(src, r.data[:n])
 	return err
@@ -135,6 +140,8 @@ type decompressor struct {
 	gz gzip.Reader
 
 	cr *countReader
+
+	dd libdeflate.Decompressor
 
 	// Current block size.
 	blockSize int
@@ -224,7 +231,6 @@ func (d *decompressor) nextBlockAt(off int64, rs io.ReadSeeker) *decompressor {
 	d.lazyBlock()
 
 	d.acquireHead()
-	defer d.releaseHead()
 
 	if d.cr.offset() != off {
 		if rs == nil {
@@ -235,12 +241,16 @@ func (d *decompressor) nextBlockAt(off int64, rs io.ReadSeeker) *decompressor {
 			var ok bool
 			rs, ok = d.owner.r.(io.ReadSeeker)
 			if !ok {
-				panic("bgzf: unexpected offset without seek")
+				d.err = ErrCorrupt
+				d.wg.Done()
+				d.releaseHead()
+				return d
 			}
 		}
 		d.err = d.cr.seek(rs, off)
 		if d.err != nil {
 			d.wg.Done()
+			d.releaseHead()
 			return d
 		}
 	}
@@ -249,6 +259,7 @@ func (d *decompressor) nextBlockAt(off int64, rs io.ReadSeeker) *decompressor {
 	d.err = d.readMember()
 	if d.err != nil {
 		d.wg.Done()
+		d.releaseHead()
 		return d
 	}
 	d.blk.setHeader(d.gz.Header)
@@ -256,10 +267,16 @@ func (d *decompressor) nextBlockAt(off int64, rs io.ReadSeeker) *decompressor {
 
 	// Decompress data into the decompressor's Block.
 	go func() {
-		d.err = d.blk.readFrom(&d.gz)
+		// Possible todo: use a pool of preallocated libdeflate.Decompressor
+		// objects instead.
+		var dd libdeflate.Decompressor
+		dd.Init()
+		d.err = d.blk.readBuf(d.buf.data[:d.buf.size], dd)
+		dd.Cleanup()
+
+		d.releaseHead()
 		d.wg.Done()
 	}()
-
 	return d
 }
 
@@ -302,7 +319,7 @@ func (d *decompressor) readMember() error {
 	// Read compressed data into the decompressor buffer until the
 	// underlying flate.Reader is positioned at the end of the gzip
 	// member in which the readMember call was made.
-	return d.buf.readLimited(need, d.cr)
+	return d.buf.readLimited(d.blockSize-skipped, d.cr)
 }
 
 // Offset is a BGZF virtual offset.
