@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/biogo/hts/bgzf"
-	"github.com/biogo/hts/bgzf/cache"
+	. "github.com/grailbio/hts/bgzf"
+	"github.com/grailbio/hts/bgzf/cache"
 )
 
 var (

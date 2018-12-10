@@ -16,10 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/biogo/hts/bgzf"
-	"github.com/biogo/hts/bgzf/index"
-	"github.com/biogo/hts/internal"
-	"github.com/biogo/hts/sam"
+	"github.com/grailbio/hts/bgzf"
+	"github.com/grailbio/hts/bgzf/index"
+	"github.com/grailbio/hts/internal"
+	"github.com/grailbio/hts/sam"
 
 	"gopkg.in/check.v1"
 )

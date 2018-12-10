@@ -9,8 +9,8 @@ import (
 	"errors"
 	"sort"
 
-	"github.com/biogo/hts/bgzf"
-	"github.com/biogo/hts/bgzf/index"
+	"github.com/grailbio/hts/bgzf"
+	"github.com/grailbio/hts/bgzf/index"
 )
 
 var csiMagic = [3]byte{'C', 'S', 'I'}

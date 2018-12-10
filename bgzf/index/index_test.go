@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/biogo/hts/bgzf"
+	"github.com/grailbio/hts/bgzf"
 
 	"gopkg.in/check.v1"
 )
