@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"unsafe"
 
-	"github.com/biogo/hts/internal"
 	"github.com/grailbio/base/simd"
 	"github.com/grailbio/bio/biosimd"
+	"github.com/grailbio/hts/internal"
 )
 
 // Record represents a SAM/BAM record.
@@ -30,6 +30,8 @@ type Record struct {
 	Seq       Seq
 	Qual      []byte
 	AuxFields AuxFields
+
+	Scratch []byte
 }
 
 // NewRecord returns a Record, checking for consistency of the provided
@@ -62,12 +64,6 @@ func NewRecord(name string, ref, mRef *Reference, p, mPos, tLen int, mapQ byte, 
 			return nil, errors.New("sam: specified mate position != -1 without mate reference")
 		}
 	}
-	// gometalinter doesn't allow this.
-	/*
-		if GetFromFreePool == nil {
-			panic("GetFromFreePool not set. You must link grail.com/bio/encoding/bam to your executable")
-		}
-	*/
 	r := GetFromFreePool()
 	r.Name = name
 	r.Ref = ref

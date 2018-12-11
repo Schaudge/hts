@@ -10,8 +10,8 @@ import (
 	"errors"
 	"io"
 
-	"github.com/grailbio/hts/sam"
 	"github.com/grailbio/hts/bgzf"
+	"github.com/grailbio/hts/sam"
 	"github.com/klauspost/compress/gzip"
 )
 
@@ -72,8 +72,17 @@ func (bw *Writer) writeHeader(h *sam.Header) error {
 	return err
 }
 
-// Serialize the record into "buf".
-func marshal(r *sam.Record, buf *bytes.Buffer) error {
+// MarshalHeader encodes header in BAM binary format.
+func MarshalHeader(header *sam.Header) ([]byte, error) {
+	bb := bytes.Buffer{}
+	if err := header.EncodeBinary(&bb); err != nil {
+		return nil, err
+	}
+	return bb.Bytes(), nil
+}
+
+// Marshal serializes the record into "buf".
+func Marshal(r *sam.Record, buf *bytes.Buffer) error {
 	if len(r.Name) == 0 || len(r.Name) > 254 {
 		return errors.New("bam: name absent or too long")
 	}
@@ -128,7 +137,7 @@ func marshal(r *sam.Record, buf *bytes.Buffer) error {
 // Write writes r to the BAM stream.
 func (bw *Writer) Write(r *sam.Record) error {
 	bw.buf.Reset()
-	if err := marshal(r, &bw.buf); err != nil {
+	if err := Marshal(r, &bw.buf); err != nil {
 		return err
 	}
 	_, err := bw.bg.Write(bw.buf.Bytes())

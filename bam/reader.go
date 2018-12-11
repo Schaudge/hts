@@ -138,7 +138,7 @@ func (br *Reader) Read() (*sam.Record, error) {
 // Unmarshal a serialized record.  Parameter omit is the value of Reader.Omit().
 // Most callers should pass zero as omit.
 func unmarshal(b []byte, header *sam.Header, omit int) (*sam.Record, error) {
-	rec := (*sam.RecordWithScratchBuf)(unsafe.Pointer(sam.GetFromFreePool()))
+	rec := sam.GetFromFreePool()
 	if len(b) < 32 {
 		return nil, errors.New("bam: record too short")
 	}
@@ -254,14 +254,14 @@ done:
 	if nextRefID != -1 {
 		if refID == nextRefID {
 			rec.MateRef = rec.Ref
-			return sam.CastToRecord(rec), nil
+			return rec, nil
 		}
 		if nextRefID < -1 || nextRefID >= refs {
 			return nil, errors.New("bam: mate reference id out of range")
 		}
 		rec.MateRef = header.Refs()[nextRefID]
 	}
-	return sam.CastToRecord(rec), nil
+	return rec, nil
 }
 
 // SetCache sets the cache to be used by the Reader.
