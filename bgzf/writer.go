@@ -6,12 +6,12 @@ package bgzf
 
 import (
 	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"sync"
 
 	"github.com/grailbio/base/compress/libdeflate"
-	"github.com/klauspost/compress/gzip"
 )
 
 // Writer implements BGZF blocked gzip compression.

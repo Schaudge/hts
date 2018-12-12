@@ -6,9 +6,10 @@ package bgzf
 
 import (
 	"bytes"
+	"compress/gzip"
 	"io"
+
 	"github.com/grailbio/base/compress/libdeflate"
-	"github.com/klauspost/compress/gzip"
 )
 
 // Cache is a Block caching type. Basic cache implementations are provided
@@ -76,9 +77,9 @@ type Block interface {
 	// the file origin offset case and does not
 	// return the new offset.
 	seek(offset int64) error
-	readFrom(io.ReadCloser) error
 
-	readBuf([]byte, libdeflate.Decompressor) error
+	// readBuf uncompresses the given input data.
+	readBuf(in []byte, dd libdeflate.Decompressor) error
 
 	// len returns the number of remaining
 	// bytes that can be read from the Block.
@@ -126,46 +127,6 @@ func (b *block) Read(p []byte) (int, error) {
 		b.used = true
 	}
 	return n, err
-}
-
-// readToEOF will exhaust r or fill buf.
-// If r does not EOF upon reading up to len(buf) bytes then readToEOF will return
-// io.ErrShortBuffer and an additional byte will be discarded from the reader.
-func readToEOF(r io.Reader, buf []byte) (n int, err error) {
-	for err == nil && n < len(buf) {
-		var nn int
-		nn, err = r.Read(buf[n:])
-		n += nn
-	}
-	switch {
-	case err == io.EOF:
-		return n, nil
-	case n == MaxBlockSize && err == nil:
-		// This is paranoic, but some readers will return
-		// quickly when passed a zero-length byte slice.
-		var dummy [1]byte
-		_, err = r.Read(dummy[:])
-		if err == nil {
-			return n, io.ErrShortBuffer
-		}
-		if err == io.EOF {
-			err = nil
-		}
-	}
-	return n, err
-}
-
-func (b *block) readFrom(r io.ReadCloser) error {
-	o := b.owner
-	b.owner = nil
-	n, err := readToEOF(r, b.data[:])
-	if err != nil {
-		return err
-	}
-	b.buf = bytes.NewReader(b.data[:n])
-	b.owner = o
-	b.magic = b.magic && b.len() == 0
-	return r.Close()
 }
 
 func (b *block) readBuf(inData []byte, dd libdeflate.Decompressor) error {

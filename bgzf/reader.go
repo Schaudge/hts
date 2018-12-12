@@ -7,13 +7,13 @@ package bgzf
 import (
 	"bufio"
 	"bytes"
+	"compress/flate"
+	"compress/gzip"
 	"io"
 	"runtime"
 	"sync"
 
 	"github.com/grailbio/base/compress/libdeflate"
-	"github.com/klauspost/compress/flate"
-	"github.com/klauspost/compress/gzip"
 )
 
 // countReader wraps flate.Reader, adding support for querying current offset.
@@ -129,10 +129,6 @@ func (r *buffer) readLimited(n int, src *countReader) error {
 	return err
 }
 
-// equals returns a boolean indicating the equality between
-// the buffered data and the given byte slice.
-func (r *buffer) equals(b []byte) bool { return bytes.Equal(r.data[:r.size], b) }
-
 // decompressor is a gzip member decompressor worker.
 type decompressor struct {
 	owner *Reader
@@ -140,8 +136,6 @@ type decompressor struct {
 	gz gzip.Reader
 
 	cr *countReader
-
-	dd libdeflate.Decompressor
 
 	// Current block size.
 	blockSize int
@@ -270,10 +264,11 @@ func (d *decompressor) nextBlockAt(off int64, rs io.ReadSeeker) *decompressor {
 		// Possible todo: use a pool of preallocated libdeflate.Decompressor
 		// objects instead.
 		var dd libdeflate.Decompressor
-		dd.Init()
-		d.err = d.blk.readBuf(d.buf.data[:d.buf.size], dd)
-		dd.Cleanup()
-
+		d.err = dd.Init()
+		if d.err == nil {
+			d.err = d.blk.readBuf(d.buf.data[:d.buf.size], dd)
+			dd.Cleanup()
+		}
 		d.releaseHead()
 		d.wg.Done()
 	}()
