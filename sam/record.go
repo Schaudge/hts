@@ -70,6 +70,7 @@ func NewRecord(name string, ref, mRef *Reference, p, mPos, tLen int, mapQ byte, 
 	r.Pos = p
 	r.MapQ = mapQ
 	r.Cigar = co
+	r.Flags = 0
 	r.MateRef = mRef
 	r.MatePos = mPos
 	r.TempLen = tLen
