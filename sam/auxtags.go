@@ -344,7 +344,7 @@ var (
 	refDictTag       = Tag{'S', 'Q'}
 	refNameTag       = Tag{'S', 'N'}
 	refLengthTag     = Tag{'L', 'N'}
-	alternativeLocus = Tag{'A', 'H'}
+	alternativeLocus = Tag{'A', 'H'} // nolint
 	assemblyIDTag    = Tag{'A', 'S'}
 	md5Tag           = Tag{'M', '5'}
 	speciesTag       = Tag{'S', 'P'}
@@ -367,7 +367,7 @@ var (
 	programNameTag  = Tag{'P', 'N'}
 	commandLineTag  = Tag{'C', 'L'}
 	previousProgTag = Tag{'P', 'P'}
-	progDesc        = Tag{'D', 'S'}
+	progDesc        = Tag{'D', 'S'} // nolint
 
 	commentTag = Tag{'C', 'O'}
 )
@@ -485,4 +485,20 @@ func (a AuxFields) Get(tag Tag) Aux {
 		}
 	}
 	return nil
+}
+
+// GetUnique returns an error if the tag appears more than once, and is
+// otherwise identical to Get.
+func (a AuxFields) GetUnique(tag Tag) (Aux, error) {
+	for i, f := range a {
+		if f.Tag() == tag {
+			for _, f2 := range a[i+1:] {
+				if f2.Tag() == tag {
+					return nil, fmt.Errorf("sam.GetUnique: tag %v appears multiple times", tag)
+				}
+			}
+			return f, nil
+		}
+	}
+	return nil, nil
 }
