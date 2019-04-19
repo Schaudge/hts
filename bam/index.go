@@ -6,9 +6,9 @@ package bam
 
 import (
 	"encoding/binary"
-	"errors"
 	"io"
 
+	"github.com/grailbio/base/errors"
 	"github.com/grailbio/hts/bgzf"
 	"github.com/grailbio/hts/bgzf/index"
 	"github.com/grailbio/hts/internal"
