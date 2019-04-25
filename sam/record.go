@@ -16,6 +16,21 @@ import (
 	"github.com/grailbio/hts/internal"
 )
 
+// DupType enumerates the different possible values for the Duplicate
+// Type (DT) aux tag.
+type DupType int
+
+const (
+	// DupTypeNone specifies duplicate type not present.
+	DupTypeNone DupType = iota
+
+	// DupTypeLB specifies "library" or PCR duplicate type.
+	DupTypeLB
+
+	// DupTypeSQ specifies "sequencer" or optical duplicate type.
+	DupTypeSQ
+)
+
 // Record represents a SAM/BAM record.
 type Record struct {
 	Name      string
@@ -206,6 +221,97 @@ func (r *Record) LessByCoordinate(other *Record) bool {
 		return false
 	}
 	return (rRefName < oRefName) || (rRefName == oRefName && r.Pos < other.Pos)
+}
+
+// BagID returns the bag id (given by aux tag "DI") for r. If the DI
+// tag is not set, returns (-1, nil). If the tag is present, but malformed,
+// returns (-1, err).
+func (r *Record) BagID() (int64, error) {
+	aux, err := r.AuxFields.GetUnique(bagIDTag)
+	if err != nil || aux == nil {
+		return -1, err
+	}
+
+	var di int64
+	switch v := aux.Value().(type) {
+	case uint8:
+		di = int64(v)
+	case int8:
+		di = int64(v)
+	case int16:
+		di = int64(v)
+	case uint16:
+		di = int64(v)
+	case int32:
+		di = int64(v)
+	case string:
+		di, err = strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return -1, err
+		}
+	default:
+		return -1, fmt.Errorf("bag id: unexpected type: %T", v)
+	}
+
+	if di < 0 {
+		return -1, fmt.Errorf("bag id: expected bag id >= 0, not %d", di)
+	}
+	return di, err
+}
+
+// BagSize returns the size of the bag as defined in the "DS" aux
+// tag. If the aux tag is not present, returns (-1, nil). If the aux
+// tag is malformed, returns (-1, err).
+func (r *Record) BagSize() (int, error) {
+	aux, err := r.AuxFields.GetUnique(bagSizeTag)
+	if err != nil || aux == nil {
+		return -1, err
+	}
+
+	ds := 0
+	switch v := aux.Value().(type) {
+	case uint8:
+		ds = int(v)
+	case int8:
+		ds = int(v)
+	case int16:
+		ds = int(v)
+	case uint16:
+		ds = int(v)
+	case int32:
+		ds = int(v)
+	default:
+		return -1, fmt.Errorf("bag size: unexpected type: %T", v)
+	}
+	if ds <= 0 {
+		return -1, fmt.Errorf("bag size: expected bag size >= 1, not %d", ds)
+	}
+	return ds, nil
+}
+
+// DupType returns (DupTypeSQ, nil) if r has the DT tag, and its value
+// is "SQ" (optical). If the DT tag is present, and its value is "LB"
+// (PCR), then returns (DupTypeLB, nil). If the DT tag is not present,
+// then returns (DupTypeNone, nil). If the aux value is malformed,
+// then returns (DupTypeNone, err).
+func (r *Record) DupType() (DupType, error) {
+	aux, err := r.AuxFields.GetUnique(dupTypeTag)
+	if err != nil || aux == nil {
+		return DupTypeNone, err
+	}
+
+	s, ok := aux.Value().(string)
+	if !ok {
+		return DupTypeNone, fmt.Errorf("optical dup: unexpected type: %s", aux.String())
+	}
+
+	switch s {
+	case "SQ":
+		return DupTypeSQ, nil
+	case "LB":
+		return DupTypeLB, nil
+	}
+	return DupTypeNone, fmt.Errorf("optical dup: unexpected value: %s", aux.String())
 }
 
 // String returns a string representation of the Record.

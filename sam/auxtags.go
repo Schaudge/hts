@@ -369,6 +369,10 @@ var (
 	previousProgTag = Tag{'P', 'P'}
 	progDesc        = Tag{'D', 'S'} // nolint
 
+	bagIDTag   = Tag{'D', 'I'}
+	bagSizeTag = Tag{'D', 'S'}
+	dupTypeTag = Tag{'D', 'T'}
+
 	commentTag = Tag{'C', 'O'}
 )
 
