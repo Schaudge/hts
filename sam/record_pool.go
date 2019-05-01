@@ -58,17 +58,17 @@ import (
 //   if needed.
 type RecordFreePool struct {
 	new          func() *Record
-	local        []RecordpoolLocal
+	local        []RecordPoolLocal
 	maxLocalSize int64
 }
 
 const (
-	RecordmaxPrivateElems = 4
-	RecordcacheLineSize   = 64
+	RecordMaxPrivateElems = 4
+	RecordCacheLineSize   = 64
 )
 
-type RecordpoolLocalInner struct {
-	private     [RecordmaxPrivateElems]*Record // Can be used only by the respective P.
+type RecordPoolLocalInner struct {
+	private     [RecordMaxPrivateElems]*Record // Can be used only by the respective P.
 	privateSize int
 
 	shared     []*Record  // Can be used by any P.
@@ -76,10 +76,10 @@ type RecordpoolLocalInner struct {
 	mu         sync.Mutex // Protects shared.
 }
 
-type RecordpoolLocal struct {
-	RecordpoolLocalInner
+type RecordPoolLocal struct {
+	RecordPoolLocalInner
 	// Pad prevents false sharing.
-	pad [RecordcacheLineSize - unsafe.Sizeof(RecordpoolLocalInner{})%RecordcacheLineSize]byte
+	pad [RecordCacheLineSize - unsafe.Sizeof(RecordPoolLocalInner{})%RecordCacheLineSize]byte
 }
 
 // NewRecordFreePool creates a new free object pool. new should create a new
@@ -97,13 +97,13 @@ func NewRecordFreePool(new func() *Record, maxSize int) *RecordFreePool {
 	}
 	p := &RecordFreePool{
 		new:          new,
-		local:        make([]RecordpoolLocal, maxProcs),
+		local:        make([]RecordPoolLocal, maxProcs),
 		maxLocalSize: int64(maxLocalSize),
 	}
 	return p
 }
 
-func (p *RecordFreePool) pin() *RecordpoolLocal {
+func (p *RecordFreePool) pin() *RecordPoolLocal {
 	pid := runtime_procPin()
 	if int(pid) >= len(p.local) {
 		panic(pid)
@@ -116,7 +116,7 @@ func (p *RecordFreePool) pin() *RecordpoolLocal {
 func (p *RecordFreePool) Put(x *Record) {
 	done := false
 	l := p.pin()
-	if l.privateSize < RecordmaxPrivateElems {
+	if l.privateSize < RecordMaxPrivateElems {
 		l.private[l.privateSize] = x
 		l.privateSize++
 		done = true
