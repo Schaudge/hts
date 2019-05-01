@@ -547,7 +547,7 @@ type Seq struct {
 }
 
 var (
-	n16TableRev = [16]byte{'=', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'T', 'W', 'Y', 'H', 'K', 'D', 'B', 'N'}
+	n16TableRev = simd.MakeNibbleLookupTable([16]byte{'=', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'T', 'W', 'Y', 'H', 'K', 'D', 'B', 'N'})
 	n16Table    = [256]Doublet{
 		0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf,
 		0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf,
@@ -649,7 +649,7 @@ func (ns Seq) Base(pos int) SeqBase {
 //
 // REQUIRES: 0 <= pos < seq.Length
 func (ns Seq) BaseChar(pos int) byte {
-	return n16TableRev[ns.Base(pos)]
+	return n16TableRev.Get(byte(ns.Base(pos)))
 }
 
 // Char converts a SeqBase to a human-readable character.  For example,
@@ -657,5 +657,5 @@ func (ns Seq) BaseChar(pos int) byte {
 //
 // REQUIRES: 0 <= b < NumSeqBaseTypes
 func (b SeqBase) Char() byte {
-	return n16TableRev[b]
+	return n16TableRev.Get(byte(b))
 }
