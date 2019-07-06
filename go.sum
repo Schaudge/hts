@@ -89,7 +89,10 @@ github.com/grailbio/base v0.0.0-20190706083030-a4fd972101e2 h1:0HanFA8P38T1ppONe
 github.com/grailbio/base v0.0.0-20190706083030-a4fd972101e2/go.mod h1:xtVkHCo4A1CC5ce/oXEKsCFsnryIR4ERIylVADc2wis=
 github.com/grailbio/bio v0.0.0-20190706084355-8af80c5e17d0 h1:Zk9t159FQY+SkQf8/PwEuIt44H4qSAyYoCzGCrFNoAc=
 github.com/grailbio/bio v0.0.0-20190706084355-8af80c5e17d0/go.mod h1:On8RXccHXsy4jy8D+PuyaFrzob9dwB+cwx2WNk9Fjnk=
+github.com/grailbio/bio v0.0.0-20190706084952-335895f5b323 h1:54uJqUSHl8a7S4MDBUmcNAmXG7HXg00/IAQQvvpRavo=
+github.com/grailbio/bio v0.0.0-20190706084952-335895f5b323/go.mod h1:EQ/i7Y+ksI8ghbnNjbLU5zpEkuO9/yZ6OKsIsmjYW40=
 github.com/grailbio/hts v1.0.1/go.mod h1:7xengmmi9/cG+EkK2j17yrzRqo6+warr5mdnrY37U9U=
+github.com/grailbio/hts v1.0.2-0.20190706084809-bf19d2c5433e/go.mod h1:bbYjTiyY2fCIdAVzMDcmvzeOhuBlM2mMsDkQD/S9IQ8=
 github.com/grailbio/testutil v0.0.0-20190109212408-dbe52faee1b0/go.mod h1:eufccQYHRmdAUarmhHgulqZUFWQ7YhHohLFQ/cLRSUY=
 github.com/grailbio/testutil v0.0.0-20190127023142-d3ae812e9a0e/go.mod h1:2qNoyDzypzYqR8rwIQFnqcL7tZM9iGck0oN9+T1jzbE=
 github.com/grailbio/testutil v0.0.0-20190703174854-d9797572c8d2/go.mod h1:i+zjObs7WShJsMQUmHJUQWPsTZXrBzQuR+1+Jj/JP1Y=
