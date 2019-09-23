@@ -314,6 +314,40 @@ func (r *Record) DupType() (DupType, error) {
 	return DupTypeNone, fmt.Errorf("optical dup: unexpected value: %s", aux.String())
 }
 
+// BagLibraryDups returns the number of library duplicate fragments in the bag of the given
+// record, as defined by the DL tag. If the DL tag is not present (e.g., earlier pipeline versions
+// or read pairs with an unmapped read), -1 will be returned without an error. If the DL tag is
+// malformed, an error will be returned.
+func (r *Record) BagLibraryDups() (int, error) {
+	aux, err := r.AuxFields.GetUnique(bagLibraryDupsTag)
+	if err != nil {
+		return -1, err
+	}
+	if aux == nil {
+		return -1, nil
+	}
+
+	dl := 0
+	switch v := aux.Value().(type) {
+	case uint8:
+		dl = int(v)
+	case int8:
+		dl = int(v)
+	case int16:
+		dl = int(v)
+	case uint16:
+		dl = int(v)
+	case int32:
+		dl = int(v)
+	default:
+		return -1, fmt.Errorf("%s: unexpected type: %T", bagLibraryDupsTag, v)
+	}
+	if dl < 0 {
+		return -1, fmt.Errorf("%s: expected value >= 0, not %d", bagLibraryDupsTag, dl)
+	}
+	return dl, nil
+}
+
 // String returns a string representation of the Record.
 func (r *Record) String() string {
 	end := r.End()
