@@ -250,8 +250,9 @@ func (r *Record) BagID() (int64, error) {
 }
 
 // BagSize returns the size of the bag as defined in the "DS" aux
-// tag. If the aux tag is not present, returns (-1, nil). If the aux
-// tag is malformed, returns (-1, err).
+// tag. For a description of the DS tag, please see
+// bio-mark-duplicates. If the aux tag is not present, returns (-1,
+// nil). If the aux tag is malformed, returns (-1, err).
 func (r *Record) BagSize() (int, error) {
 	val, found, err := r.auxIntValue(bagSizeTag)
 	if found && val <= 0 {
@@ -285,14 +286,15 @@ func (r *Record) DupType() (DupType, error) {
 	return DupTypeNone, fmt.Errorf("optical dup: unexpected value: %s", aux.String())
 }
 
-// BagLibraryDups returns the number of library duplicate fragments in the bag of the given
-// record, as defined by the DL tag. If the DL tag is not present (e.g., earlier pipeline versions
-// or read pairs with an unmapped read), -1 will be returned without an error. If the DL tag is
-// malformed, an error will be returned.
-func (r *Record) BagLibraryDups() (int, error) {
-	val, found, err := r.auxIntValue(bagLibraryDupsTag)
+// LibraryBagSize returns the number of library duplicate fragments in the bag of the given
+// record, as defined by the DL tag. For a description of the DL tag and how it relates to
+// the DS tag, please see bio-mark-duplicates. If the DL tag is not present (e.g., earlier
+// pipeline versions or read pairs with an unmapped read), -1 will be returned without an
+// error. If the DL tag is malformed, an error will be returned.
+func (r *Record) LibraryBagSize() (int, error) {
+	val, found, err := r.auxIntValue(libraryBagSizeTag)
 	if found && val < 0 {
-		return -1, fmt.Errorf("%s: expected value >= 0, not %d", bagLibraryDupsTag, val)
+		return -1, fmt.Errorf("%s: expected value >= 0, not %d", libraryBagSizeTag, val)
 	}
 	return val, err
 }

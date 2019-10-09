@@ -1170,19 +1170,19 @@ func (s *S) TestDupType(c *check.C) {
 	}
 }
 
-func (s *S) TestBagLibraryDups(c *check.C) {
+func (s *S) TestLibraryBagSize(c *check.C) {
 	for _, test := range []struct {
 		r         *Record
 		expected  int
 		expectErr bool
 	}{
 		{
-			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(bagLibraryDupsTag, 3)}},
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(libraryBagSizeTag, 3)}},
 			3,
 			false,
 		},
 		{
-			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(bagLibraryDupsTag, 0)}},
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(libraryBagSizeTag, 0)}},
 			0,
 			false,
 		},
@@ -1192,19 +1192,19 @@ func (s *S) TestBagLibraryDups(c *check.C) {
 			false,
 		},
 		{
-			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(bagLibraryDupsTag, "abc")}},
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(libraryBagSizeTag, "abc")}},
 			-1,
 			true,
 		},
 		{
-			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(bagLibraryDupsTag, -4)}},
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(libraryBagSizeTag, -4)}},
 			-1,
 			true,
 		},
 	} {
 
-		libraryDups, err := test.r.BagLibraryDups()
-		c.Check(libraryDups, check.Equals, test.expected)
+		libraryBagSize, err := test.r.LibraryBagSize()
+		c.Check(libraryBagSize, check.Equals, test.expected)
 		if test.expectErr {
 			c.Check(err, check.Not(check.Equals), nil)
 		} else {

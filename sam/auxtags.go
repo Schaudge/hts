@@ -372,7 +372,7 @@ var (
 	bagIDTag          = Tag{'D', 'I'}
 	bagSizeTag        = Tag{'D', 'S'}
 	dupTypeTag        = Tag{'D', 'T'}
-	bagLibraryDupsTag = Tag{'D', 'L'}
+	libraryBagSizeTag = Tag{'D', 'L'}
 	linearDupTag      = Tag{'L', 'D'}
 	linearBagIDTag    = Tag{'L', 'I'}
 	linearBagSizeTag  = Tag{'L', 'S'}
