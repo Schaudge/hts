@@ -373,6 +373,9 @@ var (
 	bagSizeTag        = Tag{'D', 'S'}
 	dupTypeTag        = Tag{'D', 'T'}
 	bagLibraryDupsTag = Tag{'D', 'L'}
+	linearDupTag      = Tag{'L', 'D'}
+	linearBagIDTag    = Tag{'L', 'I'}
+	linearBagSizeTag  = Tag{'L', 'S'}
 
 	commentTag = Tag{'C', 'O'}
 )

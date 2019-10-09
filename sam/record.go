@@ -31,6 +31,21 @@ const (
 	DupTypeSQ
 )
 
+// LinearDupState enumerates the different possible Linear Duplicate
+// states for a read pair, stored in the LD aux tag.
+type LinearDupState int
+
+const (
+	// LinearNone specifies linear dup tag not present.
+	LinearNone = iota
+
+	// LinearPrimary specifies linear primary.
+	LinearPrimary
+
+	// LinearDuplicate specifies linear duplicate.
+	LinearDuplicate
+)
+
 // Record represents a SAM/BAM record.
 type Record struct {
 	Name      string
@@ -227,66 +242,22 @@ func (r *Record) LessByCoordinate(other *Record) bool {
 // tag is not set, returns (-1, nil). If the tag is present, but malformed,
 // returns (-1, err).
 func (r *Record) BagID() (int64, error) {
-	aux, err := r.AuxFields.GetUnique(bagIDTag)
-	if err != nil || aux == nil {
-		return -1, err
+	val, found, err := r.auxInt64Value(bagIDTag)
+	if found && val < 0 {
+		return -1, fmt.Errorf("bag id: expected bag id >= 0, not %d", val)
 	}
-
-	var di int64
-	switch v := aux.Value().(type) {
-	case uint8:
-		di = int64(v)
-	case int8:
-		di = int64(v)
-	case int16:
-		di = int64(v)
-	case uint16:
-		di = int64(v)
-	case int32:
-		di = int64(v)
-	case string:
-		di, err = strconv.ParseInt(v, 10, 64)
-		if err != nil {
-			return -1, err
-		}
-	default:
-		return -1, fmt.Errorf("bag id: unexpected type: %T", v)
-	}
-
-	if di < 0 {
-		return -1, fmt.Errorf("bag id: expected bag id >= 0, not %d", di)
-	}
-	return di, err
+	return val, err
 }
 
 // BagSize returns the size of the bag as defined in the "DS" aux
 // tag. If the aux tag is not present, returns (-1, nil). If the aux
 // tag is malformed, returns (-1, err).
 func (r *Record) BagSize() (int, error) {
-	aux, err := r.AuxFields.GetUnique(bagSizeTag)
-	if err != nil || aux == nil {
-		return -1, err
+	val, found, err := r.auxIntValue(bagSizeTag)
+	if found && val <= 0 {
+		return -1, fmt.Errorf("bag size: expected bag size >= 1, not %d", val)
 	}
-
-	ds := 0
-	switch v := aux.Value().(type) {
-	case uint8:
-		ds = int(v)
-	case int8:
-		ds = int(v)
-	case int16:
-		ds = int(v)
-	case uint16:
-		ds = int(v)
-	case int32:
-		ds = int(v)
-	default:
-		return -1, fmt.Errorf("bag size: unexpected type: %T", v)
-	}
-	if ds <= 0 {
-		return -1, fmt.Errorf("bag size: expected bag size >= 1, not %d", ds)
-	}
-	return ds, nil
+	return val, err
 }
 
 // DupType returns (DupTypeSQ, nil) if r has the DT tag, and its value
@@ -319,33 +290,124 @@ func (r *Record) DupType() (DupType, error) {
 // or read pairs with an unmapped read), -1 will be returned without an error. If the DL tag is
 // malformed, an error will be returned.
 func (r *Record) BagLibraryDups() (int, error) {
-	aux, err := r.AuxFields.GetUnique(bagLibraryDupsTag)
-	if err != nil {
-		return -1, err
+	val, found, err := r.auxIntValue(bagLibraryDupsTag)
+	if found && val < 0 {
+		return -1, fmt.Errorf("%s: expected value >= 0, not %d", bagLibraryDupsTag, val)
 	}
-	if aux == nil {
-		return -1, nil
+	return val, err
+}
+
+// LinearDup returns the linear duplicate state of the record as
+// specified in the LD aux tag. If the LD tag is not present (e.g.,
+// earlier pipeline versions or read pairs with an unmapped read, or
+// mapq below threshold), returns (LinearNone, nil). If the LD
+// tag is present, but has an invalid value, then returns
+// (LinearNone, err). Otherwise, returns (LinearPrimary,
+// nil) or (LinearDuplicate, nil) depending on the value of the
+// LD tag.
+func (r *Record) LinearDup() (LinearDupState, error) {
+	aux, err := r.AuxFields.GetUnique(linearDupTag)
+	if err != nil || aux == nil {
+		return LinearNone, err
 	}
 
-	dl := 0
+	s, ok := aux.Value().(string)
+	if !ok {
+		return LinearNone, fmt.Errorf("linear dup: unexpected type: %s", aux.String())
+	}
+	switch s {
+	case "primary":
+		return LinearPrimary, nil
+	case "duplicate":
+		return LinearDuplicate, nil
+	}
+	return LinearNone, fmt.Errorf("linear dup: unexpected value: %s", aux.String())
+}
+
+// LinearBagID returns the linear bag id (given by aux tag "LI") for r. If the LI
+// tag is not set, returns (-1, nil). If the tag is present, but malformed,
+// returns (-1, err).
+func (r *Record) LinearBagID() (int64, error) {
+	val, found, err := r.auxInt64Value(linearBagIDTag)
+	if found && val < 0 {
+		return -1, fmt.Errorf("linear bag id: expected bag id >= 0, not %d", val)
+	}
+	return val, err
+}
+
+// LinearBagSize returns the size of the linear bag as defined in the "LS" aux
+// tag. If the aux tag is not present, returns (-1, nil). If the aux
+// tag is malformed, returns (-1, err).
+func (r *Record) LinearBagSize() (int, error) {
+	val, found, err := r.auxIntValue(linearBagSizeTag)
+	if found && val <= 0 {
+		return -1, fmt.Errorf("linear bag size: expected bag size >= 1, not %d", val)
+	}
+	return val, err
+}
+
+// auxIntValue finds the unique specified aux tag. If there is an
+// error while looking for the aux tag or the type is not an int,
+// return (-1, false, err). If the aux tag is not present, return (-1,
+// false, nil). If the aux tag is found, and it is an integer type,
+// then return (value, true, nil).
+func (r *Record) auxIntValue(tag Tag) (val int, found bool, err error) {
+	aux, err := r.AuxFields.GetUnique(tag)
+	if err != nil || aux == nil {
+		return -1, false, err
+	}
+
 	switch v := aux.Value().(type) {
 	case uint8:
-		dl = int(v)
+		val = int(v)
 	case int8:
-		dl = int(v)
+		val = int(v)
 	case int16:
-		dl = int(v)
+		val = int(v)
 	case uint16:
-		dl = int(v)
+		val = int(v)
 	case int32:
-		dl = int(v)
+		val = int(v)
 	default:
-		return -1, fmt.Errorf("%s: unexpected type: %T", bagLibraryDupsTag, v)
+		return -1, false, fmt.Errorf("%s: unexpected type: %T", tag, v)
 	}
-	if dl < 0 {
-		return -1, fmt.Errorf("%s: expected value >= 0, not %d", bagLibraryDupsTag, dl)
+	return val, true, nil
+}
+
+// auxInt64Value finds the unique specified aux tag. It is like
+// auxIntValue, but returns an int64 and also converts a string type
+// aux tag if it can be parsed as an integer.
+//
+// If there is an error while looking for the aux tag or the type is
+// not an int, return (-1, false, err). If the aux tag is not present,
+// return (-1, false, nil). If the aux tag is found, and it is an
+// integer type, then return (value, true, nil).
+func (r *Record) auxInt64Value(tag Tag) (val int64, found bool, err error) {
+	aux, err := r.AuxFields.GetUnique(tag)
+	if err != nil || aux == nil {
+		return -1, false, err
 	}
-	return dl, nil
+
+	switch v := aux.Value().(type) {
+	case uint8:
+		val = int64(v)
+	case int8:
+		val = int64(v)
+	case int16:
+		val = int64(v)
+	case uint16:
+		val = int64(v)
+	case int32:
+		val = int64(v)
+	case string:
+		val, err = strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return -1, false, err
+		}
+	default:
+		return -1, false, fmt.Errorf("%s: unexpected type: %T", tag, v)
+	}
+	return val, true, nil
 }
 
 // String returns a string representation of the Record.

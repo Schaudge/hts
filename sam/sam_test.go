@@ -1213,6 +1213,148 @@ func (s *S) TestBagLibraryDups(c *check.C) {
 	}
 }
 
+func (s *S) TestLinearDup(c *check.C) {
+	for _, test := range []struct {
+		r         *Record
+		linearDup LinearDupState
+		expectErr bool
+	}{
+		{
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(linearDupTag, "primary")}},
+			LinearPrimary,
+			false,
+		},
+		{
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(linearDupTag, "duplicate")}},
+			LinearDuplicate,
+			false,
+		},
+		{
+			&Record{Name: "foo", Ref: nil, Pos: 123},
+			LinearNone,
+			false,
+		},
+		{
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(linearDupTag, "abc")}},
+			LinearNone,
+			true,
+		},
+		{
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{
+				newAux(linearDupTag, "primary"),
+				newAux(linearDupTag, "duplicate"),
+			}},
+			LinearNone,
+			true,
+		},
+	} {
+
+		linearDup, err := test.r.LinearDup()
+		c.Check(linearDup, check.Equals, test.linearDup)
+		if test.expectErr {
+			c.Check(err, check.Not(check.Equals), nil)
+		} else {
+			c.Check(err, check.Equals, nil)
+		}
+	}
+}
+
+func (s *S) TestLinearBagID(c *check.C) {
+	for _, test := range []struct {
+		r         *Record
+		id        int64
+		expectErr bool
+	}{
+		{
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(linearBagIDTag, 33)}},
+			33,
+			false,
+		},
+		{
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(linearBagIDTag, "34")}},
+			34,
+			false,
+		},
+		{
+			&Record{Name: "foo", Ref: nil, Pos: 123},
+			-1,
+			false,
+		},
+		{
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(linearBagIDTag, -4)}},
+			-1,
+			true,
+		},
+		{
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(linearBagIDTag, "abc")}},
+			-1,
+			true,
+		},
+		{
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(linearBagIDTag, 33), newAux(linearBagIDTag, 34)}},
+			-1,
+			true,
+		},
+	} {
+
+		id, err := test.r.LinearBagID()
+		c.Check(id, check.Equals, test.id)
+		if test.expectErr {
+			c.Check(err, check.Not(check.Equals), nil)
+		} else {
+			c.Check(err, check.Equals, nil)
+		}
+	}
+}
+
+func (s *S) TestLinearBagSize(c *check.C) {
+	for _, test := range []struct {
+		r         *Record
+		id        int
+		expectErr bool
+	}{
+		{
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(linearBagSizeTag, 33)}},
+			33,
+			false,
+		},
+		{
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(linearBagSizeTag, "34")}},
+			-1,
+			true,
+		},
+		{
+			&Record{Name: "foo", Ref: nil, Pos: 123},
+			-1,
+			false,
+		},
+		{
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(linearBagSizeTag, -12)}},
+			-1,
+			true,
+		},
+		{
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(linearBagSizeTag, "abc")}},
+			-1,
+			true,
+		},
+		{
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(linearBagSizeTag, 33), newAux(linearBagSizeTag, 34)}},
+			-1,
+			true,
+		},
+	} {
+
+		id, err := test.r.LinearBagSize()
+		c.Check(id, check.Equals, test.id)
+		if test.expectErr {
+			c.Check(err, check.Not(check.Equals), nil)
+		} else {
+			c.Check(err, check.Equals, nil)
+		}
+	}
+}
+
 func BenchmarkParseCigar(b *testing.B) {
 	cig := []byte("69S17M5I30M1D45M1D23M5I14M2I4M1I10M2D7M1D6M14I33M1D6M1I7M1I18M1I8M1D4M1D4M2D57M1D21M1D6M1I14M1I7M1I3M1I9M1D3M1D7M1D37M1D9M1I5M1I15M4I12M1D10M1I10M1D8M1D26M7I12M1D20M1I36M1I22M3D8M1I23M1I13M2D10M1D12M1I15M6D4M1D4M1D1M2D5M1D3M17D1M1D13M3D7M1I29M2I9M1D2M4D7M2D8M5D3M1D1M1D23M1D10M6D19M3I24M1D8M1I11M6D14M1I5M8I12M1D8M2D5M2D2M1D23M1D11M4I35M2I19M1I4M1D13M7I33M1D21M3D2M1D9M4I19M1I14M1D7M1I41M1D23M3I18M1I6M1I13M1D9M1D1M1D20M1D23M5D8M1I13M2I11M1D78M2I18M10D9M2D10M1D10M2I6M1D3M1D21M2I7M1D7M2I12M1D20M2D18M1I12M1D8M4D18M1D6M1D20M1D14M1I1M2I23M1I10M1D7M1I15M1D4M1I9M1D11M1D12M1I8M1D21M1I13M2I59M1D12M1D18M1D13M1D22M1D13M1I19M1D13M1D19M1I11M2I27M2D10M1D17M6D13M2D17M1D13M1D19M1I3M1D13M2I33M1I26M2D9M2I21M2D10M1D36M1D32M5I23M1D13M2D17M1I14M2I24M1I5M2I8M2I24M2I9M1D7M1D2M1D15M3I19M1I2M1D3M1I7M1D5M2D24M5I1M4I33M1I13M3I34M1I2M1I23M1D3M2I8M1I5M5S")
 	for i := 0; i < b.N; i++ {
