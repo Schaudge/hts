@@ -1182,8 +1182,8 @@ func (s *S) TestLibraryBagSize(c *check.C) {
 			false,
 		},
 		{
-			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(libraryBagSizeTag, 0)}},
-			0,
+			&Record{Name: "foo", Ref: nil, Pos: 123, AuxFields: AuxFields{newAux(libraryBagSizeTag, 1)}},
+			1,
 			false,
 		},
 		{

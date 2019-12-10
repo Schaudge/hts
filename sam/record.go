@@ -293,8 +293,8 @@ func (r *Record) DupType() (DupType, error) {
 // error. If the DL tag is malformed, an error will be returned.
 func (r *Record) LibraryBagSize() (int, error) {
 	val, found, err := r.auxIntValue(libraryBagSizeTag)
-	if found && val < 0 {
-		return -1, fmt.Errorf("%s: expected value >= 0, not %d", libraryBagSizeTag, val)
+	if found && val < 1 {
+		return -1, fmt.Errorf("%s: expected value >= 1, not %d", libraryBagSizeTag, val)
 	}
 	return val, err
 }
