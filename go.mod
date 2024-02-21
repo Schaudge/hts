@@ -1,4 +1,4 @@
-module github.com/grailbio/hts
+module github.com/Schaudge/hts
 
 require (
 	github.com/biogo/boom latest
