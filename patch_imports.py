@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
-"""Script for rewriting imports from github.com/biogo -> github.com/grailbio/hts.
+"""Script for rewriting imports from github.com/biogo -> github.com/Schaudge/hts.
 
 Usage:
 
-  cd $GRAIL/go/srcgitthub.com/grailbio/hts
+  cd $GRAIL/go/srcgitthub.com/Schaudge/hts
   ./patch_imports.py
 
 """
@@ -23,7 +23,7 @@ def patch(path: str) -> None:
     with open(path) as fd:
         for line in fd.readlines():
             new_line = re.sub(
-                r'"github.com/biogo/hts', '"github.com/grailbio/hts', line
+                r'"github.com/biogo/hts', '"github.com/Schaudge/hts', line
             )
             if new_line != line:
                 line = new_line

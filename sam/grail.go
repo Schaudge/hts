@@ -7,7 +7,7 @@ package sam
 import (
 	"bytes"
 
-	gunsafe "github.com/grailbio/base/unsafe"
+	gunsafe "github.com/Schaudge/grailbase/unsafe"
 )
 
 var recordPool    = NewRecordFreePool(func() *Record { return &Record{} }, 1<<20)

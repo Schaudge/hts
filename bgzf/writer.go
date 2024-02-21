@@ -11,7 +11,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/grailbio/base/compress/libdeflate"
+	"github.com/Schaudge/grailbase/compress/libdeflate"
 )
 
 // Writer implements BGZF blocked gzip compression.

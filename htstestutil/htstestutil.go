@@ -3,7 +3,7 @@ package htstestutil
 import (
 	"sync"
 
-	"github.com/grailbio/hts/sam"
+	"github.com/Schaudge/hts/sam"
 	"github.com/grailbio/testutil/h"
 )
 

@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/grailbio/hts/bgzf"
+	"github.com/Schaudge/hts/bgzf"
 )
 
 // WriteIndex writes the Index to the given io.Writer.

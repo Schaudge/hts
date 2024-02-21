@@ -9,7 +9,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/grailbio/hts/sam"
+	"github.com/Schaudge/hts/sam"
 )
 
 // Merger implements merging BAM data with a defined sort

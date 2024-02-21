@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/grailbio/hts/bgzf"
-	"github.com/grailbio/hts/bgzf/index"
+	"github.com/Schaudge/hts/bgzf"
+	"github.com/Schaudge/hts/bgzf/index"
 )
 
 // WriteTo writes the CSI index to the given io.Writer. Note that

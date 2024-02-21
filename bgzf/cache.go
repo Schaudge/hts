@@ -9,7 +9,7 @@ import (
 	"compress/gzip"
 	"io"
 
-	"github.com/grailbio/base/compress/libdeflate"
+	"github.com/Schaudge/grailbase/compress/libdeflate"
 )
 
 // Cache is a Block caching type. Basic cache implementations are provided

@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"unsafe"
 
-	"github.com/grailbio/base/simd"
-	"github.com/grailbio/bio/biosimd"
-	"github.com/grailbio/hts/internal"
+	"github.com/Schaudge/grailbase/simd"
+	"github.com/Schaudge/grailbio/biosimd"
+	"github.com/Schaudge/hts/internal"
 )
 
 // DupType enumerates the different possible values for the Duplicate

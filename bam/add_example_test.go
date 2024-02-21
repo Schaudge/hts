@@ -9,7 +9,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/grailbio/hts/bam"
+	"github.com/Schaudge/hts/bam"
 )
 
 func ExampleIndex_Add() {

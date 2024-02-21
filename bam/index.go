@@ -8,11 +8,11 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/grailbio/base/errors"
-	"github.com/grailbio/hts/bgzf"
-	"github.com/grailbio/hts/bgzf/index"
-	"github.com/grailbio/hts/internal"
-	"github.com/grailbio/hts/sam"
+	"github.com/Schaudge/grailbase/errors"
+	"github.com/Schaudge/hts/bgzf"
+	"github.com/Schaudge/hts/bgzf/index"
+	"github.com/Schaudge/hts/internal"
+	"github.com/Schaudge/hts/sam"
 )
 
 // Index is a BAI index.

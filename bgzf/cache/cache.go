@@ -8,7 +8,7 @@ package cache
 import (
 	"sync"
 
-	"github.com/grailbio/hts/bgzf"
+	"github.com/Schaudge/hts/bgzf"
 )
 
 var (

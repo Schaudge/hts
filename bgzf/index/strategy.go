@@ -5,7 +5,7 @@
 package index
 
 import (
-	"github.com/grailbio/hts/bgzf"
+	"github.com/Schaudge/hts/bgzf"
 )
 
 // MergeStrategy represents a chunk compression strategy.

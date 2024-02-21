@@ -11,8 +11,8 @@ import (
 	"io"
 	"sort"
 
-	"github.com/grailbio/hts/bgzf"
-	"github.com/grailbio/hts/bgzf/index"
+	"github.com/Schaudge/hts/bgzf"
+	"github.com/Schaudge/hts/bgzf/index"
 )
 
 // ReadFrom reads the CSI index from the given io.Reader. Note that

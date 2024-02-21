@@ -13,7 +13,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/grailbio/base/compress/libdeflate"
+	"github.com/Schaudge/grailbase/compress/libdeflate"
 )
 
 // countReader wraps flate.Reader, adding support for querying current offset.
