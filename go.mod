@@ -3,8 +3,8 @@ module github.com/Schaudge/hts
 go 1.19
 
 require (
-	github.com/Schaudge/grailbase v0.0.0-20240221080929-a3080ca8c732
-	github.com/Schaudge/grailbio v0.0.0-20240221084236-67c769851cc7
+	github.com/Schaudge/grailbase v0.0.0-20240221142636-402ae911f1dc
+	github.com/Schaudge/grailbio v0.0.0-20240221142342-53bf6987467c
 	github.com/biogo/boom v0.0.0-20150317015657-28119bc1ffc1
 	github.com/grailbio/testutil v0.0.3
 	github.com/klauspost/compress v1.8.6
