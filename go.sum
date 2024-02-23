@@ -4,8 +4,8 @@ cloud.google.com/go v0.38.0/go.mod h1:990N+gfupTy94rShfmMCWGDn0LpTmnzTp2qbd1dvSR
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/Schaudge/grailbase v0.0.0-20240222085301-0e5b2d6914e4 h1:CXwHr0M2j1kkbH01fkNZClt/4w7xtR1z51+vUG6AweE=
 github.com/Schaudge/grailbase v0.0.0-20240222085301-0e5b2d6914e4/go.mod h1:qKjql8pMNGtgX/28jCp+YvspzWf3acfYb3c9T2U3EnI=
-github.com/Schaudge/grailbio v0.0.0-20240221150128-d41b7b12d3ee h1:Q0jAM++o6hXrAe8lg1mDfpvkdG6n7wbLFJhyX67rN78=
-github.com/Schaudge/grailbio v0.0.0-20240221150128-d41b7b12d3ee/go.mod h1:WU3ovJCjR/X+nVqo49ve7pv1+B/O5L6tbal2bGmu5HE=
+github.com/Schaudge/grailbio v0.0.0-20240223024842-cff4bfc6ee22 h1:/FwmsNH2jhO3W4pgsnItqyI5xFz+QmrVfrZlSa8NZFk=
+github.com/Schaudge/grailbio v0.0.0-20240223024842-cff4bfc6ee22/go.mod h1:DKwmF0GPYodvFO3957YtdUzSUZULyx3lUXxYzRECdFU=
 github.com/aws/aws-sdk-go v1.23.22/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
 github.com/biogo/boom v0.0.0-20150317015657-28119bc1ffc1 h1:LAHY5JxqhOgJDeDBGKsQ4300qd3sG8C0j5CQS8gD+Kw=
 github.com/biogo/boom v0.0.0-20150317015657-28119bc1ffc1/go.mod h1:fwtxkutinkQcME9Zlywh66T0jZLLjgrwSLY2WxH2N3U=
