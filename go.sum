@@ -2,8 +2,8 @@ cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMT
 cloud.google.com/go v0.34.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 cloud.google.com/go v0.38.0/go.mod h1:990N+gfupTy94rShfmMCWGDn0LpTmnzTp2qbd1dvSRU=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
-github.com/Schaudge/grailbase v0.0.0-20240222085301-0e5b2d6914e4 h1:CXwHr0M2j1kkbH01fkNZClt/4w7xtR1z51+vUG6AweE=
-github.com/Schaudge/grailbase v0.0.0-20240222085301-0e5b2d6914e4/go.mod h1:qKjql8pMNGtgX/28jCp+YvspzWf3acfYb3c9T2U3EnI=
+github.com/Schaudge/grailbase v0.0.0-20240223061707-44c758a471c0 h1:qm/Jj+tz0/slnIWiizbtwgBqtjqvVXQ7HeFeuiXi8+4=
+github.com/Schaudge/grailbase v0.0.0-20240223061707-44c758a471c0/go.mod h1:IVJmImmf6Xtgpf3rdZyMvZ7orE09sBIys1lHrobPYLM=
 github.com/Schaudge/grailbio v0.0.0-20240223024842-cff4bfc6ee22 h1:/FwmsNH2jhO3W4pgsnItqyI5xFz+QmrVfrZlSa8NZFk=
 github.com/Schaudge/grailbio v0.0.0-20240223024842-cff4bfc6ee22/go.mod h1:DKwmF0GPYodvFO3957YtdUzSUZULyx3lUXxYzRECdFU=
 github.com/aws/aws-sdk-go v1.23.22/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
